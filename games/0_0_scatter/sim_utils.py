@@ -1,3 +1,5 @@
+import argparse
+import json
 import multiprocessing as mp
 import os
 import random
@@ -21,11 +23,20 @@ WIN_BUCKET_LABELS: Iterable[str] = [
 
 BONUS_BUCKET_KEYS: Iterable[str] = [
     "0x",
-    "0-10x",
-    "10-50x",
+    "0-1x",
+    "1-5x",
+    "5-10x",
+    "10-20x",
+    "20-50x",
     "50-100x",
-    "100-250x",
-    "250x+",
+    "100-200x",
+    "200-500x",
+    "500-1000x",
+    "1000-2500x",
+    "2500-5000x",
+    "5000-10000x",
+    "10000-25000x",
+    "25000x",
 ]
 
 MODE_TRIGGER_CONFIG = {
@@ -69,17 +80,35 @@ def get_trigger_config(mode: str) -> dict:
 
 
 def _classify_bonus_bucket(win: float) -> str:
-    if win < 0.01:
+    if win <= 0:
         return "0x"
-    if win <= 10:
-        return "0-10x"
-    if win <= 50:
-        return "10-50x"
-    if win <= 100:
+    if win < 1:
+        return "0-1x"
+    if win < 5:
+        return "1-5x"
+    if win < 10:
+        return "5-10x"
+    if win < 20:
+        return "10-20x"
+    if win < 50:
+        return "20-50x"
+    if win < 100:
         return "50-100x"
-    if win <= 250:
-        return "100-250x"
-    return "250x+"
+    if win < 200:
+        return "100-200x"
+    if win < 500:
+        return "200-500x"
+    if win < 1000:
+        return "500-1000x"
+    if win < 2500:
+        return "1000-2500x"
+    if win < 5000:
+        return "2500-5000x"
+    if win < 10000:
+        return "5000-10000x"
+    if win < 25000:
+        return "10000-25000x"
+    return "25000x"
 
 
 def choose_forced_bonus_type(
@@ -659,53 +688,39 @@ def simulate_freegame_only(num_triggers: int, mode: str = "regular") -> float:
     return total / num_triggers if num_triggers else 0.0
 
 
-def measure_regular_bonus_ev(num_triggers: int = 5000, mode: str = "base") -> dict:
-    """Measure regular bonus EV by running standalone regular bonuses."""
+def measure_regular_bonus_ev(num_runs: int = 5000) -> dict:
+    """Run standalone regular bonuses (equivalent to the regular buy) and report EV."""
     bucket_counts = {key: 0 for key in BONUS_BUCKET_KEYS}
     total_win = 0.0
-    total_spins = 0.0
-    total_retriggers = 0.0
-    for _ in range(num_triggers):
-        result = _play_bonus_round("regular", mode=mode)
+    for _ in range(num_runs):
+        result = _play_bonus_round("regular", mode="regular_buy")
         win = result["win"]
         total_win += win
-        total_spins += result["spins"]
-        total_retriggers += result["retriggers"]
         bucket_counts[_classify_bonus_bucket(win)] += 1
-    avg_win = total_win / num_triggers if num_triggers else 0.0
-    avg_spins = total_spins / num_triggers if num_triggers else 0.0
-    avg_retriggers = total_retriggers / num_triggers if num_triggers else 0.0
+    avg_win = total_win / num_runs if num_runs else 0.0
     return {
         "avg_win": avg_win,
-        "avg_spins": avg_spins,
-        "avg_retriggers": avg_retriggers,
-        "bucket_counts": bucket_counts,
-        "num_triggers": num_triggers,
+        "rtp": (avg_win / 100.0) if num_runs else 0.0,
+        "buckets": bucket_counts,
+        "runs": num_runs,
     }
 
 
-def measure_super_bonus_ev(num_triggers: int = 3000, mode: str = "base") -> dict:
-    """Measure super bonus EV by running standalone super bonuses."""
+def measure_super_bonus_ev(num_runs: int = 3000) -> dict:
+    """Run standalone super bonuses (equivalent to the super buy) and report EV."""
     bucket_counts = {key: 0 for key in BONUS_BUCKET_KEYS}
     total_win = 0.0
-    total_spins = 0.0
-    total_retriggers = 0.0
-    for _ in range(num_triggers):
-        result = _play_bonus_round("super", mode=mode)
+    for _ in range(num_runs):
+        result = _play_bonus_round("super", mode="super_buy")
         win = result["win"]
         total_win += win
-        total_spins += result["spins"]
-        total_retriggers += result["retriggers"]
         bucket_counts[_classify_bonus_bucket(win)] += 1
-    avg_win = total_win / num_triggers if num_triggers else 0.0
-    avg_spins = total_spins / num_triggers if num_triggers else 0.0
-    avg_retriggers = total_retriggers / num_triggers if num_triggers else 0.0
+    avg_win = total_win / num_runs if num_runs else 0.0
     return {
         "avg_win": avg_win,
-        "avg_spins": avg_spins,
-        "avg_retriggers": avg_retriggers,
-        "bucket_counts": bucket_counts,
-        "num_triggers": num_triggers,
+        "rtp": (avg_win / 500.0) if num_runs else 0.0,
+        "buckets": bucket_counts,
+        "runs": num_runs,
     }
 
 
@@ -753,6 +768,29 @@ def _finalize_buy_results(chunks: Iterable[dict], mode: str) -> dict:
     rtp = total_win / total_bet if total_bet else 0.0
     avg_win = total_win / total_runs if total_runs else 0.0
     return {"mode": mode, "rtp": rtp, "avg_win": avg_win, "bucket_counts": bucket_counts}
+
+
+def _cli():
+    parser = argparse.ArgumentParser(description="Candy Carnage Monte Carlo utilities")
+    parser.add_argument(
+        "--mode",
+        choices=["regular_bonus_ev", "super_bonus_ev"],
+        required=True,
+        help="Which EV helper to run.",
+    )
+    parser.add_argument("--runs", type=int, default=5000, help="Number of simulations to run.")
+    args = parser.parse_args()
+
+    if args.mode == "regular_bonus_ev":
+        result = measure_regular_bonus_ev(args.runs)
+    else:
+        result = measure_super_bonus_ev(args.runs)
+
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    _cli()
 
 
 def _format_trigger_rate(rate: float | None, num_spins: int) -> str:
