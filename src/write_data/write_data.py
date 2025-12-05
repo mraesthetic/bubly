@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from warnings import warn
+import math
 import shutil
 import os
 import hashlib
@@ -16,7 +17,7 @@ def quantize_payout_cents(multiplier: float) -> int:
     RGS requires lookup payouts to be multiples of 0.10x, i.e. payout % 10 == 0.
     """
     raw_cents = multiplier * 100.0
-    snapped_cents = int(round(raw_cents / 10.0)) * 10
+    snapped_cents = int(math.floor(raw_cents / 10.0 + 0.5)) * 10
     return snapped_cents
 
 
