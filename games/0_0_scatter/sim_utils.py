@@ -697,39 +697,63 @@ def simulate_freegame_only(num_triggers: int, mode: str = "regular") -> float:
     return total / num_triggers if num_triggers else 0.0
 
 
-def measure_regular_bonus_ev(num_runs: int = 5000) -> dict:
+def measure_regular_bonus_ev(num_runs: int = 5000, processes: Optional[int] = None) -> dict:
     """Run standalone regular bonuses (equivalent to the regular buy) and report EV."""
-    bucket_counts = {key: 0 for key in BONUS_BUCKET_KEYS}
-    total_win = 0.0
-    for _ in range(num_runs):
-        result = _play_bonus_round("regular", mode="regular_buy")
-        win = result["win"]
-        total_win += win
-        bucket_counts[_classify_bonus_bucket(win)] += 1
-    avg_win = total_win / num_runs if num_runs else 0.0
-    return {
-        "avg_win": avg_win,
-        "rtp": (avg_win / 100.0) if num_runs else 0.0,
-        "buckets": bucket_counts,
-        "runs": num_runs,
-    }
+    return _measure_bonus_ev("regular", num_runs, 100.0, processes)
 
 
-def measure_super_bonus_ev(num_runs: int = 3000) -> dict:
+def measure_super_bonus_ev(num_runs: int = 3000, processes: Optional[int] = None) -> dict:
     """Run standalone super bonuses (equivalent to the super buy) and report EV."""
-    bucket_counts = {key: 0 for key in BONUS_BUCKET_KEYS}
+    return _measure_bonus_ev("super", num_runs, 500.0, processes)
+
+
+def _measure_bonus_ev(bonus_type: str, num_runs: int, cost: float, processes: Optional[int]) -> dict:
+    if processes is None:
+        processes = max(1, min(os.cpu_count() or 1, num_runs))
+    processes = max(1, processes)
+    if processes == 1 or num_runs < processes:
+        return _finalize_bonus_ev_results([_measure_bonus_chunk(bonus_type, num_runs)], num_runs, cost)
+
+    chunk_sizes = _split_work(num_runs, processes)
+    with mp.Pool(len(chunk_sizes)) as pool:
+        chunks = pool.starmap(
+            _measure_bonus_chunk,
+            [(bonus_type, chunk_size, idx) for idx, chunk_size in enumerate(chunk_sizes, start=1)],
+        )
+    return _finalize_bonus_ev_results(chunks, num_runs, cost)
+
+
+def _measure_bonus_chunk(bonus_type: str, num_runs: int, chunk_index: int = 0) -> dict:
+    mode = "regular_buy" if bonus_type == "regular" else "super_buy"
     total_win = 0.0
-    for _ in range(num_runs):
-        result = _play_bonus_round("super", mode="super_buy")
+    bucket_counts = {key: 0 for key in BONUS_BUCKET_KEYS}
+    for idx in range(num_runs):
+        result = _play_bonus_round(bonus_type, mode=mode)
         win = result["win"]
         total_win += win
         bucket_counts[_classify_bonus_bucket(win)] += 1
-    avg_win = total_win / num_runs if num_runs else 0.0
+        if chunk_index == 0 and ((idx + 1) % 1000 == 0 or (idx + 1) == num_runs):
+            # Only the main process logs progress to avoid noisy output
+            label = "regular_bonus_ev" if bonus_type == "regular" else "super_bonus_ev"
+            print(f"[{label}] {idx + 1}/{num_runs} runs completed", flush=True)
+    return {"runs": num_runs, "total_win": total_win, "bucket_counts": bucket_counts}
+
+
+def _finalize_bonus_ev_results(chunks: Iterable[dict], total_runs: int, cost: float) -> dict:
+    bucket_counts = {key: 0 for key in BONUS_BUCKET_KEYS}
+    total_win = 0.0
+    runs_accum = 0
+    for chunk in chunks:
+        runs_accum += chunk["runs"]
+        total_win += chunk["total_win"]
+        for key in bucket_counts:
+            bucket_counts[key] += chunk["bucket_counts"].get(key, 0)
+    avg_win = total_win / total_runs if total_runs else 0.0
     return {
         "avg_win": avg_win,
-        "rtp": (avg_win / 500.0) if num_runs else 0.0,
+        "rtp": (avg_win / cost) if total_runs else 0.0,
         "buckets": bucket_counts,
-        "runs": num_runs,
+        "runs": total_runs,
     }
 
 

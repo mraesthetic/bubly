@@ -70,32 +70,32 @@ class GameConfig(Config):
         self.paytable = self.convert_range_table(pay_group)
 
         base_multiplier_weights = {
-            2: 1,
-            3: 1,
-            4: 1,
-            5: 1,
-            6: 1,
-            8: 1,
-            10: 1,
-            12: 1,
-            15: 1,
-            20: 1,
-            25: 1,
-            50: 1,
-            100: 1,
-            500: 1,
-            1000: 1,
+            2:   900,
+            3:   700,
+            4:   550,
+            5:   350,
+            6:   250,
+            8:   100,
+            10:   60,
+            12:   45,
+            15:   40,
+            20:   30,
+            25:   27,
+            50:    15,
+            100:   7,
+            500:   2,
+            1000:  1,
         }
         self.multiplier_weights = {
             self.basegame_type: base_multiplier_weights,
             self.freegame_type: dict(base_multiplier_weights),
         }
         self.super_multiplier_weights = {
-            20: 1,
-            25: 1,
-            50: 1,
-            100: 1,
-            500: 1,
+            20: 150,
+            25: 65,
+            50: 11,
+            100: 3,
+            500: 2,
             1000: 1,
         }
 
