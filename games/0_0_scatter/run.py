@@ -29,10 +29,10 @@ if __name__ == "__main__":
         sims_per_mode = 10000
 
     num_sim_args = {
-        "base": sims_per_mode,
-        "bonus_hunt": sims_per_mode,
-        "regular_buy": sims_per_mode,
-        "super_buy": sims_per_mode,
+        "base": 2000000,
+        "bonus_hunt": 2000000,
+        "regular_buy": 500000,
+        "super_buy": 500000,
     }
 
     run_conditions = {
