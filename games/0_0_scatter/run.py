@@ -21,19 +21,19 @@ if __name__ == "__main__":
     sims_per_mode = 10000
 
     num_sim_args = {
-        "base": 1000000,
-        "bonus_hunt": 1000000,
-        "regular_buy": 500000,
-        "super_buy": 500000,
+        "base": 0,
+        "bonus_hunt": 0,
+        "regular_buy": 0,
+        "super_buy": 0,
     }
 
     run_conditions = {
-        "run_sims": True,
+        "run_sims": False,
         "run_optimization": True,
         "run_analysis": True,
         "run_format_checks": True,
     }
-    target_modes = ["base", "bonus_hunt", "regular_buy", "super_buy"] # "bonus_hunt", "regular_buy", "super_buy"]
+    target_modes = ["regular_buy", "super_buy"] # "bonus_hunt", "regular_buy", "super_buy"]
 
     config = GameConfig()
     gamestate = GameState(config)
