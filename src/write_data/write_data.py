@@ -10,6 +10,16 @@ import ast
 import zstandard as zstd
 
 
+def quantize_payout_cents(multiplier: float) -> int:
+    """
+    Snap a payout multiplier (x bet) to the nearest 0.10x expressed in cents.
+    RGS requires lookup payouts to be multiples of 0.10x, i.e. payout % 10 == 0.
+    """
+    raw_cents = multiplier * 100.0
+    snapped_cents = int(round(raw_cents / 10.0)) * 10
+    return snapped_cents
+
+
 def get_sha_256(file_to_hash: str):
     """Get human readable hash of file."""
     try:
@@ -80,7 +90,10 @@ def make_lookup_tables(gamestate: object, name: str):
     sims = list(gamestate.library.keys())
     sims.sort()
     for sim in sims:
-        file.write("{},1,{}\n".format(gamestate.library[sim]["id"], gamestate.library[sim]["payoutMultiplier"]))
+        multiplier = gamestate.library[sim]["payoutMultiplier"] / 100.0
+        payout_cents = quantize_payout_cents(multiplier)
+        gamestate.library[sim]["payoutMultiplier"] = payout_cents
+        file.write(f"{gamestate.library[sim]['id']},1,{payout_cents}\n")
     file.close()
 
 
@@ -90,15 +103,15 @@ def make_lookup_pay_split(gamestate: object, name: str):
     sims = list(gamestate.library.keys())
     sims.sort()
     for sim in sims:
+        base_win = gamestate.library[sim]["baseGameWins"]
+        free_win = gamestate.library[sim]["freeGameWins"]
+        base_cents = quantize_payout_cents(base_win)
+        free_cents = quantize_payout_cents(free_win)
         file.write(
-            str(gamestate.library[sim]["id"])
-            + ","
-            + str(gamestate.library[sim]["criteria"])
-            + ","
-            + str(round(gamestate.library[sim]["baseGameWins"], 2))
-            + ","
-            + str(round(gamestate.library[sim]["freeGameWins"], 2))
-            + "\n"
+            f"{gamestate.library[sim]['id']},"
+            f"{gamestate.library[sim]['criteria']},"
+            f"{base_cents / 100:.2f},"
+            f"{free_cents / 100:.2f}\n"
         )
     file.close()
 
@@ -263,7 +276,11 @@ def output_lookup_and_force_files(
 
 def write_json(gamestate, filename: str):
     """Convert the list of dictionaries to a JSON-encoded string and compress it in chunks."""
-    json_objects = [json.dumps(item) for item in gamestate.library.values()]
+    json_objects = []
+    for item in gamestate.library.values():
+        payout_multiplier = item["payoutMultiplier"] / 100.0
+        item["payoutMultiplier"] = quantize_payout_cents(payout_multiplier)
+        json_objects.append(json.dumps(item))
     combined_data = "\n".join(json_objects) + "\n"
 
     if filename.endswith(".zst"):
