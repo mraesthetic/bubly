@@ -48,6 +48,10 @@ class Scatter:
         symbols_on_board = defaultdict(list)
         wild_positions = []
         total_win = 0.0
+        scatter_symbol_names = set()
+        scatter_symbol_names.update(config.special_symbols.get("scatter", []))
+        scatter_symbol_names.update(config.special_symbols.get("super_scatter", []))
+
         for reel_idx, reel in enumerate(board):
             for row_idx, symbol in enumerate(reel):
                 if symbol.name not in config.special_symbols[wild_key]:
@@ -63,10 +67,12 @@ class Scatter:
             if (win_size, sym) in config.paytable:
                 symbol_mult = 0
                 for p in symbols_on_board[sym]:
-                    if board[p["reel"]][p["row"]].check_attribute(multiplier_key):
-                        symbol_mult += board[p["reel"]][p["row"]].get_attribute(multiplier_key)
+                    board_symbol = board[p["reel"]][p["row"]]
+                    if board_symbol.check_attribute(multiplier_key):
+                        symbol_mult += board_symbol.get_attribute(multiplier_key)
 
-                    board[p["reel"]][p["row"]].assign_attribute({"explode": True})
+                    if board_symbol.name not in scatter_symbol_names:
+                        board_symbol.assign_attribute({"explode": True})
 
                 symbol_mult = max(symbol_mult, 1)
                 overlay_position = Scatter.get_central_scatter_position(
