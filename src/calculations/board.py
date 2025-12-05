@@ -24,11 +24,54 @@ class Board(GeneralGameState):
         board = [[]] * self.config.num_reels
         for i in range(self.config.num_reels):
             board[i] = [0] * self.config.num_rows[i]
-        reel_positions = [random.randrange(0, len(self.reelstrip[reel])) for reel in range(self.config.num_reels)]
+        reel_positions = [0] * self.config.num_reels
         padding_positions = [0] * self.config.num_reels
         first_scatter_reel = -1
+        scatter_symbols = {"S", "BS"}
+        valid_reel_columns = []
         for reel in range(self.config.num_reels):
-            reel_pos = reel_positions[reel]
+            reel_valid = []
+            reel_strip = self.reelstrip[reel]
+            reel_len = len(reel_strip)
+            for start in range(reel_len):
+                column_symbols = [
+                    reel_strip[(start + row) % reel_len] for row in range(self.config.num_rows[reel])
+                ]
+                scatter_count = sum(1 for sym in column_symbols if sym in scatter_symbols)
+                if scatter_count <= 1:
+                    reel_valid.append(
+                        {
+                            "start": start,
+                            "symbols": column_symbols,
+                            "has_bs": any(sym == "BS" for sym in column_symbols),
+                        }
+                    )
+            if not reel_valid:
+                raise RuntimeError(f"No valid reel windows available for reel {reel}.")
+            valid_reel_columns.append(reel_valid)
+
+        selected_columns = []
+        bs_used = False
+        for reel in range(self.config.num_reels):
+            candidates = valid_reel_columns[reel]
+            filtered = [c for c in candidates if not c["has_bs"]] if bs_used else candidates
+            options = filtered if filtered else candidates
+            # Attempt to select a candidate that respects the BS constraint.
+            choice = random.choice(options)
+            if bs_used and choice["has_bs"]:
+                non_bs = [c for c in candidates if not c["has_bs"]]
+                if non_bs:
+                    choice = random.choice(non_bs)
+                else:
+                    raise RuntimeError("Unable to satisfy BS constraint with available reel windows.")
+            selected_columns.append(choice)
+            if choice["has_bs"]:
+                bs_used = True
+
+        for reel in range(self.config.num_reels):
+            meta = selected_columns[reel]
+            reel_pos = meta["start"]
+            reel_positions[reel] = reel_pos
             if self.config.include_padding:
                 top_symbols.append(
                     self.create_symbol(self.reelstrip[reel][(reel_pos - 1) % len(self.reelstrip[reel])])
@@ -39,7 +82,7 @@ class Board(GeneralGameState):
                     )
                 )
             for row in range(self.config.num_rows[reel]):
-                sym_id = self.reelstrip[reel][(reel_pos + row) % len(self.reelstrip[reel])]
+                sym_id = meta["symbols"][row]
                 sym = self.create_symbol(sym_id)
                 board[reel][row] = sym
                 if sym.special:
@@ -54,7 +97,7 @@ class Board(GeneralGameState):
                                     and first_scatter_reel == -1
                                 ):
                                     first_scatter_reel = reel + 1
-            padding_positions[reel] = (reel_positions[reel] + len(board[reel]) + 1) % len(self.reelstrip[reel])
+            padding_positions[reel] = (reel_pos + len(board[reel]) + 1) % len(self.reelstrip[reel])
 
         if first_scatter_reel > -1 and first_scatter_reel != self.config.num_reels:
             count = 1
@@ -201,15 +244,6 @@ class Board(GeneralGameState):
         ):
             num_scatters = get_random_outcome(self.get_current_distribution_conditions()["scatter_triggers"])
             self.force_special_board(trigger_symbol, num_scatters)
-        elif (
-            not (self.get_current_distribution_conditions()["force_freegame"])
-            and self.gametype == self.config.basegame_type
-        ):
-            self.create_board_reelstrips()
-            while self.count_special_symbols(trigger_symbol) >= min(
-                self.config.freespin_triggers[self.gametype].keys()
-            ):
-                self.create_board_reelstrips()
         else:
             self.create_board_reelstrips()
         if emit_event:

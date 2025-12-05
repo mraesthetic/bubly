@@ -73,33 +73,54 @@ freespin condition. Otherwise, occurrences of Scatter symbols tumbling onto the 
 #### Summary:
 
 * A 6-reel, 5-row pay-anywhere tumbling (cascading) game.
-* 8 paying total (4 high, 4 low)
-* 2 special symbols (wild, scatter)
+* 9 paying total (4 high, 5 low)
+* 3 special symbols (regular scatter `S`, super scatter `BS`, multiplier `M`)
 
-Symbols payouts are grouped by cluster-sizes (8-8), (9-10), (11,13), (14,36)
+Symbols pay in three ranges: 8-9, 10-11 and 12+. Payouts follow the table below:
+
+| Symbol | 8-9 | 10-11 | 12+ |
+| --- | --- | --- | --- |
+| H1 | 10x | 25x | 50x |
+| H2 | 2.5x | 10x | 25x |
+| H3 | 2x | 5x | 15x |
+| H4 | 1.5x | 2x | 12x |
+| L1 | 1x | 1.5x | 10x |
+| L2 | 0.8x | 1.2x | 8x |
+| L3 | 0.5x | 1x | 5x |
+| L4 | 0.4x | 0.9x | 4x |
+| L5 | 0.25x | 0.75x | 2x |
 
 #### Basegame: 
 
-Minimum of 3 Scatter symbols needed for freegame trigger. 
-2 freegame spins are awarded for each Scatter. 
+A minimum of 4 Scatter (`S`) symbols is required to trigger the regular bonus.
+Once triggered, the player always receives 10 free spins (retriggers add another flat 10 spins).
+Landing ≥3 Scatters along with at least one `BS` symbol triggers the super bonus.
+`BS` symbols also count toward scatter payouts (4→0x, 5→5x, 6+→100x).
+Inside any bonus (regular or super) only `S` symbols can land; `BS` never appears once the feature starts. Landing **3+** scatters during a bonus spin awards **+5** additional free spins.
 
 
 #### Freegame rules
-Every tumble increments the global multiplier by +1, which is persistent throughout the freegame
-The global multiplier is applied to the tumble win as they are removed from the board
-After all tumbles have completed: multiply the cumulative tumble win by multipliers on board 
-(multipliers on board do not increment the global mult)
-If there is a multiplier symbol on the board, this is added to the global multiplier before the final evaluation
+Tumbles continue while wins remain on the board.
+After tumbling ends, multiplier symbols that remain on the board are summed and applied to the cumulative tumble win.
+Board multipliers apply a single time per spin and do not persist to the next spin.
+Super bonuses currently share the same tumble rules and payouts as the regular bonus.
+
+#### Super bonus
+* Triggered by ≥3 `S` symbols plus at least one `BS` symbol.
+* Always awards 10 free spins on trigger (retriggers still add 10 spins).
+* Mirrors the standard bonus today, enabling future divergence without rework.
+* The `regular_buy` mode (100×) forces the standard bonus, while `super_buy` (500×) guarantees the BS + 3S super setup, both currently sharing the same math profile.
 
 
 #### Notes
 Due to the potential for symbols to tumble into the active board area, there is no upper limit on the number of freegame that can be awarded.
-The total number of freegame is 2 * (number of Scatters on board). To account for this the usual 'updateTotalFreeSpinAmount' function is overridden 
-in the game_executables.py file.
+Bonuses (regular or super) always start with 10 spins, and retriggers add a fixed +10. The usual 'updateTotalFreeSpinAmount' function is overridden 
+in the game_executables.py file to enforce this rule.
+The `bonus_hunt` mode (3× cost) simply replays the base game with boosted scatter odds for chasing features.
 
 #### Event descriptions
 "winInfo" Summarizes winning combinations. Includes multipliers, symbol positions, payInfo [passed for every tumble event]
-"tumbleBanner" includes values from the cumulative tumble, with global mult applied
+"tumbleBanner" includes values from the cumulative tumble after applying board multipliers
 "setWin" this the result for the entire spin (from on Reveal to the next). Applied after board has stopped tumbling
 "seTotalWin" the cumulative win for a round. In the base-game this will be equal to the setWin, but in the bonus it will incrementally increase 
 

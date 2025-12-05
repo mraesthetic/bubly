@@ -61,7 +61,7 @@ class GameLinesConfig:
 
         self.special_symbols = {"wild": ["W"], "scatter": ["S"], "multiplier": ["M", "WM"], "blank": ["X"]}
 
-        self.mult_values = [2, 3, 4, 5]
+        self.mult_values = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 50, 100, 500, 1000]
         self.bet_modes = []
         self.basegame_type = "basegame"
         self.freegame_type = "freegame"

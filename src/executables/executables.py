@@ -41,18 +41,19 @@ class Executables(Conditions, Tumble):
         return False
 
     def check_fs_condition(self, scatter_key: str = "scatter") -> bool:
-        """Check if there are enough active scatters to trigger fs."""
-        if self.count_special_symbols(scatter_key) >= min(
-            self.config.freespin_triggers[self.gametype].keys()
-        ) and not (self.repeat):
+        """Check if a natural regular bonus should trigger."""
+        if self.repeat:
+            return False
+        if self.get_current_distribution_conditions().get("force_freegame"):
             return True
-        return False
+        natural = getattr(self, "get_natural_bonus_type", lambda: None)()
+        return natural == "regular"
 
     def check_freespin_entry(self, scatter_key: str = "scatter") -> bool:
         """Ensure that betmode criteria is expecting freespin trigger."""
-        if self.get_current_distribution_conditions()["force_freegame"] and len(
-            self.special_syms_on_board[scatter_key]
-        ) >= min(self.config.freespin_triggers[self.gametype].keys()):
+        if self.get_current_distribution_conditions().get("force_freegame"):
+            return True
+        if getattr(self, "get_natural_bonus_type", lambda: None)() == "regular":
             return True
         self.repeat = True
         return False
@@ -71,7 +72,12 @@ class Executables(Conditions, Tumble):
 
     def update_freespin_amount(self, scatter_key: str = "scatter") -> None:
         """Set initial number of spins for a freegame and transmit event."""
-        self.tot_fs = self.config.freespin_triggers[self.gametype][self.count_special_symbols(scatter_key)]
+        base_spins = self.config.freespin_triggers[self.gametype][self.count_special_symbols(scatter_key)]
+        max_cap = getattr(self.config, "max_free_spins_per_round", base_spins)
+        if not hasattr(self, "fs_retrigger_count"):
+            self.fs_retrigger_count = 0
+        self.fs_retrigger_count = 0
+        self.tot_fs = min(base_spins, max_cap)
         if self.gametype == self.config.basegame_type:
             basegame_trigger, freegame_trigger = True, False
         else:
@@ -80,7 +86,20 @@ class Executables(Conditions, Tumble):
 
     def update_fs_retrigger_amt(self, scatter_key: str = "scatter") -> None:
         """Update total freespin amount on retrigger."""
-        self.tot_fs += self.config.freespin_triggers[self.gametype][self.count_special_symbols(scatter_key)]
+        max_spins = getattr(self.config, "max_free_spins_per_round", float("inf"))
+        max_retriggers = getattr(self.config, "max_freegame_retriggers", float("inf"))
+        if not hasattr(self, "fs_retrigger_count"):
+            self.fs_retrigger_count = 0
+        if self.fs_retrigger_count >= max_retriggers:
+            return
+        remaining_cap = max_spins - self.tot_fs
+        if remaining_cap <= 0:
+            return
+        spins_to_add = min(5, remaining_cap)
+        if spins_to_add <= 0:
+            return
+        self.tot_fs += spins_to_add
+        self.fs_retrigger_count += 1
         fs_trigger_event(self, freegame_trigger=True, basegame_trigger=False)
 
     def update_freespin(self) -> None:

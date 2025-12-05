@@ -258,12 +258,17 @@ class GeneralGameState(ABC):
         self.recorded_events = {}
         self.betmode = betmode
         self.num_sims = num_sims
-        for sim in range(
-            thread_index * num_sims + (total_threads * num_sims) * repeat_count,
-            (thread_index + 1) * num_sims + (total_threads * num_sims) * repeat_count,
-        ):
+        start_sim = thread_index * num_sims + (total_threads * num_sims) * repeat_count
+        end_sim = (thread_index + 1) * num_sims + (total_threads * num_sims) * repeat_count
+        for sim in range(start_sim, end_sim):
             self.criteria = sim_to_criteria[sim]
             self.run_spin(sim, simulation_seeds[sim])
+            local_idx = sim - start_sim + 1
+            if local_idx % max(1, num_sims // 5) == 0 or local_idx == num_sims:
+                print(
+                    f"[{betmode}] thread {thread_index} progress: {local_idx}/{num_sims} spins",
+                    flush=True,
+                )
         mode_cost = self.get_current_betmode().get_cost()
 
         print(

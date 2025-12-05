@@ -126,6 +126,9 @@ fn run_farm(
 
 
         if !fence.win_type {
+            if fence.win_dist.is_empty() {
+                continue;
+            }
             let mut win_range_params: Vec<&mut Dress> = Vec::new();
             for dress in &mut fence.dresses {
                 win_range_params.push(dress);
@@ -137,6 +140,9 @@ fn run_farm(
                 if !sorted_wins.contains(&win.0) {
                     sorted_wins.push(win.0);
                 }
+            }
+            if win_array.is_empty() {
+                continue;
             }
             win_array.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let max_win = win_array[win_array.len() - 1];
@@ -307,6 +313,8 @@ fn print_information(
                         });
                     }
                 }
+            } else if fence.win_dist.is_empty() {
+                continue;
             } else {
                 for (win, book_id_list) in &fence.win_dist {
                     let mut weight = 0.0;
@@ -440,6 +448,9 @@ fn recreate_show_pig(
     let mut random_weights_to_apply: Vec<Vec<Vec<f64>>> = Vec::new();
     for fence in fences {
         if !fence.win_type {
+            if fence.win_dist.is_empty() {
+                continue;
+            }
             let mut _win_vec: Vec<f64> = Vec::with_capacity(fence.win_dist.len());
             for (key, _win) in &fence.win_dist {
                 _win_vec.push(key.0);
@@ -456,6 +467,8 @@ fn recreate_show_pig(
             if let Some(index) = win_dist_index_map.get(&F64Wrapper(fence.avg_win)) {
                 weights[*index] += 1.0 / fence.hr;
             }
+        } else if fence.win_dist.is_empty() {
+            continue;
         } else {
             random_weights_to_apply[non_win_type_count].push(vec![
                 0.0;
@@ -552,6 +565,9 @@ fn create_show_pigs(
         Array1::zeros((test_spins[test_spins.len() - 1] * trials) as usize);
     for fence in fences {
         if !fence.win_type {
+            if fence.win_dist.is_empty() {
+                continue;
+            }
             let mut _win_vec: Vec<f64> = Vec::with_capacity(fence.win_dist.len());
             for (key, _win) in &fence.win_dist {
                 _win_vec.push(key.0);
@@ -584,6 +600,8 @@ fn create_show_pigs(
                 if let Some(index) = win_dist_index_map.get(&F64Wrapper(fence.avg_win)) {
                     weights[*index] += 1.0 / fence.hr;
                 } 
+            } else if fence.win_dist.is_empty() {
+                continue;
             } else {
                 if p == 0 {
                     random_weights_to_apply[non_win_type_count].push(vec![
