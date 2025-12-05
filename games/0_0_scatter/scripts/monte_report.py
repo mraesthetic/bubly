@@ -1,5 +1,12 @@
 import json
-from games.0_0_scatter import sim_utils as s
+import sys
+from pathlib import Path
+
+GAME_DIR = Path(__file__).resolve().parents[1]
+if str(GAME_DIR) not in sys.path:
+    sys.path.insert(0, str(GAME_DIR))
+
+import sim_utils as s
 
 
 def summarize_spin_mode(mode: str, spins: int = 200_000, include_bonuses: bool = True):
