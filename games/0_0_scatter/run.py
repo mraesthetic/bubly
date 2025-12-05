@@ -13,20 +13,12 @@ from src.write_data.write_configs import generate_configs
 if __name__ == "__main__":
 
     aws_fast = os.getenv("AWS_FAST", "").lower() in {"1", "true", "yes"}
-    if aws_fast:
-        num_threads = min(os.cpu_count() or 32, 32)
-        rust_threads = num_threads * 2
-        batching_size = 5000
-        compression = True
-        profiling = False
-        sims_per_mode = 1000
-    else:
-        num_threads = 10
-        rust_threads = 20
-        batching_size = 10000
-        compression = True
-        profiling = False
-        sims_per_mode = 10000
+    num_threads = 32
+    rust_threads = 64
+    batching_size = 10000
+    compression = True
+    profiling = False
+    sims_per_mode = 10000
 
     num_sim_args = {
         "base": 1000000,
