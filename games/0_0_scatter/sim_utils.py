@@ -3,8 +3,17 @@ import json
 import multiprocessing as mp
 import os
 import random
+import sys
 from collections import Counter
+from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple
+
+GAME_DIR = Path(__file__).resolve().parent
+PARENT_DIR = GAME_DIR.parent
+if str(GAME_DIR) not in sys.path:
+    sys.path.insert(0, str(GAME_DIR))
+if str(PARENT_DIR) not in sys.path:
+    sys.path.insert(0, str(PARENT_DIR))
 
 from game_config import GameConfig
 from gamestate import GameState

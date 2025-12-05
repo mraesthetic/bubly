@@ -19,7 +19,7 @@ if __name__ == "__main__":
         batching_size = 5000
         compression = True
         profiling = False
-        sims_per_mode = 50000
+        sims_per_mode = 1000
     else:
         num_threads = 10
         rust_threads = 20
