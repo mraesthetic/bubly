@@ -30,10 +30,10 @@ BONUS_BUCKET_KEYS: Iterable[str] = [
 
 MODE_TRIGGER_CONFIG = {
     "base": {
-        "target_regular_rate": 1.0 / 170.0,
-        "target_super_rate": 1.0 / 1600.0,
+        "target_regular_rate": 1.0 / 180.0,
+        "target_super_rate": 1.0 / 1800.0,
         "force_regular_weight": 1.0,
-        "force_super_weight": 0.15,
+        "force_super_weight": 0.10,
         "global_force_base_prob": 0.05,
     },
     "bonus_hunt": {
