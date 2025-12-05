@@ -90,6 +90,14 @@ class GameConfig(Config):
             self.basegame_type: base_multiplier_weights,
             self.freegame_type: dict(base_multiplier_weights),
         }
+        self.super_multiplier_weights = {
+            20: 1,
+            25: 1,
+            50: 1,
+            100: 1,
+            500: 1,
+            1000: 1,
+        }
 
         self.include_padding = True
         self.special_symbols = {
@@ -296,3 +304,9 @@ class GameConfig(Config):
                 ],
             ),
         ]
+
+    def get_multiplier_pool(self, gametype: str, super_bonus_active: bool = False) -> dict[int, int]:
+        """Return the appropriate multiplier weights for current context."""
+        if super_bonus_active and gametype == self.freegame_type:
+            return self.super_multiplier_weights
+        return self.multiplier_weights[gametype]

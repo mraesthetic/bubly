@@ -158,12 +158,11 @@ class GameExecutables(GameCalculations):
 
     def get_visible_scatter_count(self, scatter_name: str = "S") -> int:
         """Count scatter symbols currently visible on the board."""
-        count = 0
-        for reel in self.board:
-            for symbol in reel:
-                if getattr(symbol, "name", "") == scatter_name:
-                    count += 1
-        return count
+        scatter_set = {scatter_name}
+        scatter_set.update(self.config.special_symbols.get("scatter", []))
+        return sum(
+            1 for reel in self.board for symbol in reel if getattr(symbol, "name", "") in scatter_set
+        )
 
     def get_scatter_totals(self) -> tuple[int, int]:
         """Return counts of regular and super scatters on the current board."""
@@ -180,9 +179,24 @@ class GameExecutables(GameCalculations):
             return "regular"
         return None
 
-    def grant_bonus_retrigger_if_needed(self, scatter_name: str = "S", spins_awarded: int = 5) -> None:
+    def grant_bonus_retrigger_if_needed(self, scatter_name: str = "S", spins_awarded: int = 5) -> bool:
         """Check whether retrigger criteria is satisfied."""
-        return self.get_visible_scatter_count(scatter_name) >= 3
+        scatter_count = self._count_regular_bonus_scatters()
+        if scatter_count >= 3:
+            print(
+                f"[RetriggerCheck] mode={self.betmode} gametype={self.gametype} scatters={scatter_count}"
+            )
+            return True
+        return False
+
+    def _count_regular_bonus_scatters(self) -> int:
+        """Count regular scatter symbols currently visible on the board."""
+        scatter_names = set(self.config.special_symbols.get("scatter", []))
+        if not scatter_names:
+            scatter_names = {"S"}
+        return sum(
+            1 for reel in self.board for symbol in reel if getattr(symbol, "name", "") in scatter_names
+        )
 
     def _alias_super_scatter_symbols(self):
         aliased_symbols = []

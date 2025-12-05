@@ -1,7 +1,10 @@
+import random
 from typing import Dict, List, Optional, Tuple
 
 from game_override import GameStateOverride
+from src.calculations.scatter import Scatter
 from src.events.events import reveal_event
+from buy_templates import REGULAR_BUY_REVEAL_TEMPLATES, SUPER_BUY_REVEAL_TEMPLATES
 
 
 class GameState(GameStateOverride):
@@ -131,23 +134,10 @@ class GameState(GameStateOverride):
     def _run_buy_entry_spin(self, betmode: str) -> None:
         self.reset_book()
         self.draw_board(emit_event=False)
-        layout = (
-            [
-                {"reel": 0, "row": 0, "symbol": "S"},
-                {"reel": 1, "row": 0, "symbol": "S"},
-                {"reel": 2, "row": 0, "symbol": "S"},
-                {"reel": 3, "row": 0, "symbol": "S"},
-            ]
-            if betmode == "regular_buy"
-            else [
-                {"reel": 0, "row": 0, "symbol": "S"},
-                {"reel": 1, "row": 0, "symbol": "S"},
-                {"reel": 2, "row": 0, "symbol": "S"},
-                {"reel": 3, "row": 0, "symbol": "BS"},
-            ]
-        )
-        self._build_buy_entry_board(layout)
+        template = self._select_buy_template(betmode)
+        self._build_buy_entry_board(template)
         self.get_special_symbols_on_board()
+        self._assert_no_buy_reveal_win(betmode)
         reveal_event(self)
         scatter_count, super_count = self._get_scatter_counts()
 
@@ -168,19 +158,43 @@ class GameState(GameStateOverride):
         self.check_repeat()
         self.imprint_wins()
 
-    def _build_buy_entry_board(self, layout: List[Dict[str, object]]) -> None:
-        filler_symbol = getattr(self, "buy_entry_filler_symbol", "L1")
-        self.board = [
-            [self.create_symbol(filler_symbol) for _ in range(self.config.num_rows[reel_idx])]
-            for reel_idx in range(self.config.num_reels)
-        ]
-        for placement in layout:
-            reel = placement["reel"]
-            row = placement["row"]
-            symbol_name = placement["symbol"]
-            self.board[reel][row] = self.create_symbol(symbol_name)
+    def _build_buy_entry_board(self, layout: List[Dict[str, object]] | List[List[str]]) -> None:
+        if not layout:
+            raise ValueError("buy entry layout is empty")
+
+        if isinstance(layout[0], dict):
+            filler_symbol = getattr(self, "buy_entry_filler_symbol", "L1")
+            self.board = [
+                [self.create_symbol(filler_symbol) for _ in range(self.config.num_rows[reel_idx])]
+                for reel_idx in range(self.config.num_reels)
+            ]
+            for placement in layout:
+                reel = placement["reel"]
+                row = placement["row"]
+                symbol_name = placement["symbol"]
+                self.board[reel][row] = self.create_symbol(symbol_name)
+            return
+
+        assert len(layout) == self.config.num_reels, "buy template reel count mismatch"
+        new_board: List[List[object]] = []
+        for reel_idx, column in enumerate(layout):
+            assert len(column) == self.config.num_rows[reel_idx], "buy template row count mismatch"
+            new_board.append([self.create_symbol(symbol_name) for symbol_name in column])
+        self.board = new_board
 
     def _get_scatter_counts(self) -> Tuple[int, int]:
         regular = len(self.special_syms_on_board.get("scatter", []))
         super_scatter = len(self.special_syms_on_board.get("super_scatter", []))
         return regular, super_scatter
+
+    def _select_buy_template(self, betmode: str) -> List[List[str]]:
+        templates = (
+            REGULAR_BUY_REVEAL_TEMPLATES if betmode == "regular_buy" else SUPER_BUY_REVEAL_TEMPLATES
+        )
+        template = random.choice(templates)
+        return [list(column) for column in template]
+
+    def _assert_no_buy_reveal_win(self, betmode: str) -> None:
+        win_data = Scatter.get_scatterpay_wins(self.config, self.board)
+        total_win = round(win_data["totalWin"], 5)
+        assert total_win == 0, f"{betmode} reveal board produced payout {total_win}x"
