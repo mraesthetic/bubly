@@ -27,7 +27,7 @@ class GameStateOverride(GameExecutables):
         super().draw_board(emit_event=False, trigger_symbol=trigger_symbol)
         self.get_special_symbols_on_board()
         distribution_conditions = self.get_current_distribution_conditions()
-        if distribution_conditions.get("force_super_bonus"):
+        if distribution_conditions.get("force_super_bonus") and self.gametype == self.config.basegame_type:
             self._ensure_super_bonus_mix()
         self._sanitize_bonus_board()
         if emit_event:
@@ -35,6 +35,9 @@ class GameStateOverride(GameExecutables):
 
     def tumble_game_board(self):
         super().tumble_game_board()
+        distribution_conditions = self.get_current_distribution_conditions()
+        if distribution_conditions.get("force_super_bonus") and self.gametype == self.config.basegame_type:
+            self._ensure_super_bonus_mix()
         self._sanitize_bonus_board()
 
     def assign_special_sym_function(self):
