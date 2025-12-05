@@ -1,3 +1,5 @@
+import multiprocessing as mp
+import os
 import random
 from collections import Counter
 from typing import Dict, Iterable, Optional, Tuple
@@ -47,6 +49,18 @@ MODE_BET_MULTIPLIER = {
     "base": 1.0,
     "bonus_hunt": 3.0,
 }
+
+
+def _split_work(total: int, parts: int) -> list[int]:
+    """Divide work into roughly equal integer chunks."""
+    base = total // parts
+    remainder = total % parts
+    sizes: list[int] = []
+    for i in range(parts):
+        chunk = base + (1 if i < remainder else 0)
+        if chunk > 0:
+            sizes.append(chunk)
+    return sizes
 
 
 def get_trigger_config(mode: str) -> dict:
@@ -163,8 +177,30 @@ def simulate_single_spin(
     return result
 
 
-def run_monte_carlo(num_spins: int, mode: str = "base", include_bonuses: bool = True) -> Dict[str, object]:
-    """Run many single spins and aggregate statistics for the requested mode."""
+def run_monte_carlo(
+    num_spins: int, mode: str = "base", include_bonuses: bool = True, processes: Optional[int] = None
+) -> Dict[str, object]:
+    """Run many single spins and aggregate statistics for the requested mode.
+
+    When `processes` is greater than 1 (or left as None, which defaults to CPU count),
+    the workload is distributed across multiple processes for faster execution.
+    """
+    if processes is None:
+        processes = max(1, min(os.cpu_count() or 1, num_spins))
+    processes = max(1, processes)
+    if processes == 1 or num_spins < processes:
+        chunk_result = _run_monte_carlo_chunk(num_spins, mode, include_bonuses)
+        return _finalize_monte_carlo_result([chunk_result], mode)
+
+    chunk_sizes = _split_work(num_spins, processes)
+    with mp.Pool(len(chunk_sizes)) as pool:
+        chunk_results = pool.starmap(
+            _run_monte_carlo_chunk, [(chunk, mode, include_bonuses) for chunk in chunk_sizes]
+        )
+    return _finalize_monte_carlo_result(chunk_results, mode)
+
+
+def _run_monte_carlo_chunk(num_spins: int, mode: str, include_bonuses: bool) -> Dict[str, object]:
     total_return = 0.0
     sum_base_win_no_bonus = 0.0
     sum_regular_bonus_win = 0.0
@@ -227,9 +263,9 @@ def run_monte_carlo(num_spins: int, mode: str = "base", include_bonuses: bool = 
     return {
         "mode": mode,
         "num_spins": num_spins,
+        "bet_per_spin": bet_per_spin,
         "total_return": total_return,
         "total_bet": total_bet,
-        "bet_per_spin": bet_per_spin,
         "wins_by_bucket": wins_by_bucket,
         "regular_bonus_triggers": regular_bonus_triggers,
         "super_bonus_triggers": super_bonus_triggers,
@@ -245,12 +281,113 @@ def run_monte_carlo(num_spins: int, mode: str = "base", include_bonuses: bool = 
         "actual_regular_rate": actual_regular_rate,
         "actual_super_rate": actual_super_rate,
         "scatter_counts": dict(scatter_counts),
-        "hit_rate": hit_rate,
-        "zero_rate": zero_rate,
+        "hit_count": hits,
         "sum_base_win_no_bonus": sum_base_win_no_bonus,
         "sum_regular_bonus_win": sum_regular_bonus_win,
         "sum_super_bonus_win": sum_super_bonus_win,
     }
+
+
+def _finalize_monte_carlo_result(results: Iterable[Dict[str, object]], mode: str) -> Dict[str, object]:
+    aggregate = {
+        "mode": mode,
+        "num_spins": 0,
+        "bet_per_spin": MODE_BET_MULTIPLIER.get(mode, 1.0),
+        "total_return": 0.0,
+        "wins_by_bucket": {label: 0 for label in WIN_BUCKET_LABELS},
+        "regular_bonus_triggers": 0,
+        "super_bonus_triggers": 0,
+        "bonus_triggers": 0,
+        "regular_bonus_rate": None,
+        "super_bonus_rate": None,
+        "natural_regular_triggers": 0,
+        "natural_super_triggers": 0,
+        "natural_regular_rate": None,
+        "natural_super_rate": None,
+        "actual_regular_triggers": 0,
+        "actual_super_triggers": 0,
+        "actual_regular_rate": None,
+        "actual_super_rate": None,
+        "scatter_counts": Counter(),
+        "hit_count": 0,
+        "sum_base_win_no_bonus": 0.0,
+        "sum_regular_bonus_win": 0.0,
+        "sum_super_bonus_win": 0.0,
+    }
+
+    for res in results:
+        aggregate["num_spins"] += res["num_spins"]
+        aggregate["bet_per_spin"] = res["bet_per_spin"]
+        aggregate["total_return"] += res["total_return"]
+        aggregate["regular_bonus_triggers"] += res["regular_bonus_triggers"]
+        aggregate["super_bonus_triggers"] += res["super_bonus_triggers"]
+        aggregate["bonus_triggers"] += res["bonus_triggers"]
+        aggregate["natural_regular_triggers"] += res["natural_regular_triggers"]
+        aggregate["natural_super_triggers"] += res["natural_super_triggers"]
+        aggregate["actual_regular_triggers"] += res["actual_regular_triggers"]
+        aggregate["actual_super_triggers"] += res["actual_super_triggers"]
+        aggregate["sum_base_win_no_bonus"] += res["sum_base_win_no_bonus"]
+        aggregate["sum_regular_bonus_win"] += res["sum_regular_bonus_win"]
+        aggregate["sum_super_bonus_win"] += res["sum_super_bonus_win"]
+        aggregate["hit_count"] += res["hit_count"]
+        aggregate["scatter_counts"].update(res["scatter_counts"])
+        for label in aggregate["wins_by_bucket"]:
+            aggregate["wins_by_bucket"][label] += res["wins_by_bucket"].get(label, 0)
+
+    total_bet = aggregate["num_spins"] * aggregate["bet_per_spin"]
+    zero_hits = aggregate["wins_by_bucket"].get("0", 0)
+    result = {
+        "mode": mode,
+        "num_spins": aggregate["num_spins"],
+        "bet_per_spin": aggregate["bet_per_spin"],
+        "total_return": aggregate["total_return"],
+        "total_bet": total_bet,
+        "wins_by_bucket": aggregate["wins_by_bucket"],
+        "regular_bonus_triggers": aggregate["regular_bonus_triggers"],
+        "super_bonus_triggers": aggregate["super_bonus_triggers"],
+        "bonus_triggers": aggregate["bonus_triggers"],
+        "regular_bonus_rate": (
+            aggregate["num_spins"] / aggregate["regular_bonus_triggers"]
+            if aggregate["regular_bonus_triggers"]
+            else None
+        ),
+        "super_bonus_rate": (
+            aggregate["num_spins"] / aggregate["super_bonus_triggers"]
+            if aggregate["super_bonus_triggers"]
+            else None
+        ),
+        "natural_regular_triggers": aggregate["natural_regular_triggers"],
+        "natural_super_triggers": aggregate["natural_super_triggers"],
+        "natural_regular_rate": (
+            aggregate["num_spins"] / aggregate["natural_regular_triggers"]
+            if aggregate["natural_regular_triggers"]
+            else None
+        ),
+        "natural_super_rate": (
+            aggregate["num_spins"] / aggregate["natural_super_triggers"]
+            if aggregate["natural_super_triggers"]
+            else None
+        ),
+        "actual_regular_triggers": aggregate["actual_regular_triggers"],
+        "actual_super_triggers": aggregate["actual_super_triggers"],
+        "actual_regular_rate": (
+            aggregate["num_spins"] / aggregate["actual_regular_triggers"]
+            if aggregate["actual_regular_triggers"]
+            else None
+        ),
+        "actual_super_rate": (
+            aggregate["num_spins"] / aggregate["actual_super_triggers"]
+            if aggregate["actual_super_triggers"]
+            else None
+        ),
+        "scatter_counts": dict(aggregate["scatter_counts"]),
+        "hit_rate": aggregate["hit_count"] / aggregate["num_spins"] if aggregate["num_spins"] else 0.0,
+        "zero_rate": zero_hits / aggregate["num_spins"] if aggregate["num_spins"] else 0.0,
+        "sum_base_win_no_bonus": aggregate["sum_base_win_no_bonus"],
+        "sum_regular_bonus_win": aggregate["sum_regular_bonus_win"],
+        "sum_super_bonus_win": aggregate["sum_super_bonus_win"],
+    }
+    return result
 
 
 def summarize_base_results(results: Dict[str, object]) -> None:
@@ -572,19 +709,50 @@ def measure_super_bonus_ev(num_triggers: int = 3000, mode: str = "base") -> dict
     }
 
 
-def measure_buy_mode_rtp(num_buys: int, mode: str) -> dict:
+def measure_buy_mode_rtp(num_buys: int, mode: str, processes: Optional[int] = None) -> dict:
     """Measure RTP for a buy mode by simulating standalone bonuses."""
     assert mode in {"regular_buy", "super_buy"}
+    if processes is None:
+        processes = max(1, min(os.cpu_count() or 1, num_buys))
+    processes = max(1, processes)
+    if processes == 1 or num_buys < processes:
+        chunk = _measure_buy_mode_chunk(num_buys, mode)
+        return _finalize_buy_results([chunk], mode)
+
+    chunk_sizes = _split_work(num_buys, processes)
+    with mp.Pool(len(chunk_sizes)) as pool:
+        chunks = pool.starmap(_measure_buy_mode_chunk, [(chunk, mode) for chunk in chunk_sizes])
+    return _finalize_buy_results(chunks, mode)
+
+
+def _measure_buy_mode_chunk(num_buys: int, mode: str) -> dict:
     bonus_type = "super" if mode == "super_buy" else "regular"
     bet_cost = 500.0 if bonus_type == "super" else 100.0
     total_win = 0.0
-    total_bet = 0.0
+    bucket_counts = {key: 0 for key in BONUS_BUCKET_KEYS}
     for _ in range(num_buys):
         result = _play_bonus_round(bonus_type, mode=mode)
-        total_win += result["win"]
-        total_bet += bet_cost
+        win = result["win"]
+        total_win += win
+        bucket_counts[_classify_bonus_bucket(win)] += 1
+    return {"runs": num_buys, "total_win": total_win, "bet_cost": bet_cost, "bucket_counts": bucket_counts}
+
+
+def _finalize_buy_results(chunks: Iterable[dict], mode: str) -> dict:
+    total_runs = 0
+    total_win = 0.0
+    bet_cost = None
+    bucket_counts = {key: 0 for key in BONUS_BUCKET_KEYS}
+    for chunk in chunks:
+        total_runs += chunk["runs"]
+        total_win += chunk["total_win"]
+        bet_cost = chunk["bet_cost"]
+        for key in bucket_counts:
+            bucket_counts[key] += chunk["bucket_counts"].get(key, 0)
+    total_bet = total_runs * (bet_cost or 0.0)
     rtp = total_win / total_bet if total_bet else 0.0
-    return {"mode": mode, "rtp": rtp, "avg_win": total_win / num_buys if num_buys else 0.0}
+    avg_win = total_win / total_runs if total_runs else 0.0
+    return {"mode": mode, "rtp": rtp, "avg_win": avg_win, "bucket_counts": bucket_counts}
 
 
 def _format_trigger_rate(rate: float | None, num_spins: int) -> str:
