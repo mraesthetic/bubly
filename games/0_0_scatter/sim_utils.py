@@ -4,7 +4,6 @@ from typing import Dict, Iterable, Optional, Tuple
 
 from game_config import GameConfig
 from gamestate import GameState
-from bonus_scaling import apply_bonus_scaler
 
 CONFIG = GameConfig()
 GAMESTATE = GameState(CONFIG)
@@ -507,9 +506,7 @@ def _play_bonus_round(bonus_type: str, mode: str = "base") -> dict:
         GAMESTATE.super_bonus_active = False
         GAMESTATE.update_freespin_amount()
     GAMESTATE.run_freespin()
-    scaled = apply_bonus_scaler(betmode_name, bonus_type, GAMESTATE.win_manager.freegame_wins)
-    GAMESTATE.win_manager.freegame_wins = scaled
-    win_amount = scaled
+    win_amount = GAMESTATE.win_manager.freegame_wins
     spins_played = GAMESTATE.fs
     retriggers = getattr(GAMESTATE, "fs_retrigger_count", 0)
     GAMESTATE.super_bonus_active = False

@@ -14,39 +14,10 @@ from src.events.events import (
     update_tumble_win_event,
     update_freespin_event,
 )
-from bonus_scaling import apply_bonus_scaler
-
-MODE_BASE_PAYOUT_SCALER = {
-    "base": 0.770088280684791,
-    "bonus_hunt": 1.3006760418570473,
-    "default": 1.0,
-}
 
 
 class GameExecutables(GameCalculations):
     """Game specific executable functions. Used for grouping commonly used/repeated applications."""
-
-    def scale_bonus_wins(self, bonus_type: str, mode: str | None = None) -> None:
-        """Scale total freegame win using centralized bonus scaler."""
-        raw_total = getattr(self.win_manager, "freegame_wins", 0.0)
-        mode_name = mode or getattr(self, "betmode", "base")
-        scaled_total = apply_bonus_scaler(mode_name, bonus_type, raw_total)
-        delta = scaled_total - raw_total
-        if delta == 0:
-            return
-        self.win_manager.freegame_wins = scaled_total
-        self.win_manager.running_bet_win += delta
-
-    def apply_basegame_scaler(self) -> None:
-        """Scale the current base-game spin win based on bet mode."""
-        if self.gametype != self.config.basegame_type:
-            return
-        mode_name = getattr(self, "betmode", None)
-        scale = MODE_BASE_PAYOUT_SCALER.get(mode_name, 1.0)
-        if scale == 1.0:
-            return
-        scaled = round(self.win_manager.spin_win * scale, 2)
-        self.win_manager.set_spin_win(scaled)
 
     def set_end_tumble_event(self):
         """After all tumbling events have finished, multiply tumble-win by sum of mult symbols."""
@@ -65,8 +36,6 @@ class GameExecutables(GameCalculations):
                 update_tumble_win_event(self)
 
         if self.win_manager.spin_win > 0:
-            if self.gametype == self.config.basegame_type:
-                self.apply_basegame_scaler()
             set_win_event(self)
         set_total_event(self)
 
@@ -118,7 +87,6 @@ class GameExecutables(GameCalculations):
     def run_freespin_from_base(self, scatter_key: str = "scatter") -> None:
         """Trigger the freespin function, then scale payouts."""
         super().run_freespin_from_base(scatter_key=scatter_key)
-        self.scale_bonus_wins("regular", mode=getattr(self, "betmode", "base"))
 
     def run_super_bonus_from_base(self, scatter_key: str = "scatter", super_scatter_key: str = "super_scatter") -> None:
         """Trigger super bonus spins, currently mirroring the standard bonus flow."""
@@ -133,7 +101,6 @@ class GameExecutables(GameCalculations):
         )
         self.update_super_bonus_amount(scatter_key=scatter_key, super_scatter_key=super_scatter_key)
         self.run_freespin()
-        self.scale_bonus_wins("super", mode=getattr(self, "betmode", "base"))
         self.super_bonus_active = False
 
     def evaluate_finalwin(self) -> None:
