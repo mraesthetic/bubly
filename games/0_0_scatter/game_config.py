@@ -91,10 +91,10 @@ class GameConfig(Config):
             self.freegame_type: dict(base_multiplier_weights),
         }
         self.super_multiplier_weights = {
-            20: 180,
-            25: 85,
-            50: 11,
-            100: 3,
+            20: 160,
+            25: 68,
+            50: 8,
+            100: 2,
             500: 2,
             1000: 1,
         }
