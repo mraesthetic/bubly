@@ -11,6 +11,8 @@ class GameStateOverride(GameExecutables):
     e.g: A specific game may have custom book properties to reset
     """
 
+    SCATTER_BLOCKER_SYMBOLS = ("L3", "L4", "L5", "L2")
+
     def reset_book(self):
         # Reset global values used across multiple projects
         super().reset_book()
@@ -29,11 +31,13 @@ class GameStateOverride(GameExecutables):
         distribution_conditions = self.get_current_distribution_conditions()
         if distribution_conditions.get("force_super_bonus") and self.gametype == self.config.basegame_type:
             self._ensure_super_bonus_mix()
+        self._enforce_scatter_per_reel_limit()
         if emit_event:
             reveal_event(self)
 
     def tumble_game_board(self):
         super().tumble_game_board()
+        self._enforce_scatter_per_reel_limit()
         distribution_conditions = self.get_current_distribution_conditions()
         if distribution_conditions.get("force_super_bonus") and self.gametype == self.config.basegame_type:
             self._ensure_super_bonus_mix()
@@ -84,3 +88,31 @@ class GameStateOverride(GameExecutables):
             print(
                 f"[SuperMultSanitize] mode={self.betmode} adjusted {adjusted} multipliers below {min_super_mult}x."
             )
+
+    def _enforce_scatter_per_reel_limit(self):
+        """Ensure no reel ever shows more than one scatter-family symbol."""
+        scatter_symbols = {"S", "BS"}
+        replacements_made = False
+        for reel_idx in range(self.config.num_reels):
+            entries = [
+                {"row": row_idx, "name": symbol.name}
+                for row_idx, symbol in enumerate(self.board[reel_idx])
+                if symbol.name in scatter_symbols
+            ]
+            if len(entries) <= 1:
+                continue
+            keep_entry = next((entry for entry in entries if entry["name"] == "BS"), None)
+            if keep_entry is None:
+                keep_entry = max(entries, key=lambda entry: entry["row"])
+            for entry in entries:
+                if entry is keep_entry:
+                    continue
+                replacement_name = self._get_scatter_blocker_symbol()
+                self.board[reel_idx][entry["row"]] = self.create_symbol(replacement_name)
+                replacements_made = True
+        if replacements_made:
+            self.get_special_symbols_on_board()
+
+    def _get_scatter_blocker_symbol(self) -> str:
+        """Return a filler symbol to replace illegal duplicate scatters."""
+        return random.choice(self.SCATTER_BLOCKER_SYMBOLS)
