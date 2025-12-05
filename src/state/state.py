@@ -99,6 +99,9 @@ class GeneralGameState(ABC):
         self.fs = 0
         self.gametype = self.config.freegame_type
         self.win_manager.reset_spin_win()
+        # Ensure analytics classify this spin under the active gametype
+        if hasattr(self, "book") and self.book is not None:
+            self.book.criteria = self.gametype
 
     def get_betmode(self, mode_name) -> object:
         """Return all current betmode information."""
