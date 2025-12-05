@@ -70,7 +70,7 @@ class GameConfig(Config):
         self.paytable = self.convert_range_table(pay_group)
 
         base_multiplier_weights = {
-            2:   2200,
+            2:   2050,
             3:   1500,
             4:   1100,
             5:   800,
